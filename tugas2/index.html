@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Transformations in WebGL</title>
+    <style>
+        canvas { border: 1px solid black; }
+        .controls { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <canvas id="webglCanvas" width="400" height="400"></canvas>
+    
+    <div class="controls">
+        <label>Rotation: <input type="range" id="rotationSlider" min="0" max="360" value="0"></label><br>
+        <label>Scale: <input type="range" id="scaleSlider" min="0.1" max="2" step="0.1" value="1"></label><br>
+        <label>Translate X: <input type="range" id="translateXSlider" min="-1" max="1" step="0.1" value="0"></label><br>
+        <label>Translate Y: <input type="range" id="translateYSlider" min="-1" max="1" step="0.1" value="0"></label><br>
+    </div>
+
+    <script>
+        // Vertex shader program
+        const vertexShaderSource = `
+        attribute vec2 a_position;
+        uniform mat3 u_matrix;
+        void main() {
+            // Apply the matrix to the position
+            vec3 pos = u_matrix * vec3(a_position, 1.0);
+            gl_Position = vec4(pos.xy, 0, 1);
+        }
+        `;
+
+        // Fragment shader program
+        const fragmentShaderSource = `
+        precision mediump float;
+        void main() {
+            gl_FragColor = vec4(0.2, 0.6, 1.0, 1.0); // Blue color
+        }
+        `;
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Error compiling shader:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        function createProgram(gl, vertexShader, fragmentShader) {
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Error linking program:', gl.getProgramInfoLog(program));
+                return null;
+            }
+            return program;
+        }
+
+        function setGeometry(gl) {
+            const vertices = new Float32Array([
+                -0.5, -0.5,
+                 0.5, -0.5,
+                -0.5,  0.5,
+                -0.5,  0.5,
+                 0.5, -0.5,
+                 0.5,  0.5,
+            ]);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+        }
+
+        function setupMatrix(translation, rotation, scale) {
+            const cos = Math.cos(rotation);
+            const sin = Math.sin(rotation);
+            
+            return [
+                cos * scale[0], sin * scale[0], 0,
+                -sin * scale[1], cos * scale[1], 0,
+                translation[0], translation[1], 1
+            ];
+        }
+
+        function main() {
+            const canvas = document.getElementById('webglCanvas');
+            const gl = canvas.getContext('webgl');
+
+            if (!gl) {
+                console.error('WebGL not supported');
+                return;
+            }
+
+            // Compile shaders and link program
+            const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+            const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+            const program = createProgram(gl, vertexShader, fragmentShader);
+
+            // Lookup attributes and uniforms
+            const positionLocation = gl.getAttribLocation(program, 'a_position');
+            const matrixLocation = gl.getUniformLocation(program, 'u_matrix');
+
+            // Create buffer and set geometry
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            setGeometry(gl);
+
+            // Sliders
+            const rotationSlider = document.getElementById('rotationSlider');
+            const scaleSlider = document.getElementById('scaleSlider');
+            const translateXSlider = document.getElementById('translateXSlider');
+            const translateYSlider = document.getElementById('translateYSlider');
+
+            function drawScene() {
+                // Resize canvas to match display size
+                gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+                // Clear the canvas
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                // Use the program
+                gl.useProgram(program);
+
+                // Enable position attribute
+                gl.enableVertexAttribArray(positionLocation);
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+                // Compute matrix
+                const translation = [parseFloat(translateXSlider.value), parseFloat(translateYSlider.value)];
+                const rotation = parseFloat(rotationSlider.value) * Math.PI / 180;
+                const scale = [parseFloat(scaleSlider.value), parseFloat(scaleSlider.value)];
+                const matrix = setupMatrix(translation, rotation, scale);
+
+                // Set the matrix
+                gl.uniformMatrix3fv(matrixLocation, false, matrix);
+
+                // Draw
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
+
+            // Attach slider event listeners
+            rotationSlider.addEventListener('input', drawScene);
+            scaleSlider.addEventListener('input', drawScene);
+            translateXSlider.addEventListener('input', drawScene);
+            translateYSlider.addEventListener('input', drawScene);
+
+            // Initial draw
+            drawScene();
+        }
+
+        main();
+    </script>
+</body>
+</html>
